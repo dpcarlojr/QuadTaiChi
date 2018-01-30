@@ -7,10 +7,12 @@ import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
 import android.widget.EditText;
+import android.widget.Switch;
 import android.widget.TextView;
 
 public class SettingsActivity extends AppCompatActivity {
 EditText editInterval, editNag, editTiltThreshold;
+Switch swPauseWhenCharging;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -20,6 +22,7 @@ EditText editInterval, editNag, editTiltThreshold;
         editInterval = (EditText) this.findViewById(R.id.editInterval);
         editNag = (EditText) this.findViewById(R.id.editNag);
         editTiltThreshold = (EditText) this.findViewById(R.id.editTiltThreshold);
+        swPauseWhenCharging = (Switch) this.findViewById(R.id.swPauseOnCharge);
         SharedPreferences sharedPref = getSharedPreferences("taiChiPrefs", Context.MODE_PRIVATE);
         // Log.d("Settings","Interval: "+sharedPref.getInt("taiChiInterval", 0));
 
@@ -40,6 +43,7 @@ EditText editInterval, editNag, editTiltThreshold;
         } else {
             editTiltThreshold.setText(String.valueOf(sharedPref.getInt("tiltThreshold",0)));
         }
+        swPauseWhenCharging.setChecked(sharedPref.getBoolean("pauseWhenCharging", true));
     }
 
     public void updateSettings(View view) {
@@ -48,6 +52,7 @@ EditText editInterval, editNag, editTiltThreshold;
         editor.putInt("taiChiInterval", Integer.parseInt(editInterval.getText().toString()));
         editor.putInt("nagInterval", Integer.parseInt(editNag.getText().toString()));
         editor.putInt("tiltThreshold", Integer.parseInt(editTiltThreshold.getText().toString()));
+        editor.putBoolean("pauseWhenCharging", swPauseWhenCharging.isChecked());
         editor.apply();
         // Log.d("Settings","Saving "+editInterval.getText());
         MainActivity.taiChiInterval = Integer.parseInt(editInterval.getText().toString());
@@ -55,6 +60,7 @@ EditText editInterval, editNag, editTiltThreshold;
 
         MainActivity.nagInterval = Integer.parseInt(editNag.getText().toString());
         MainActivity.tiltThreshold = Integer.parseInt(editTiltThreshold.getText().toString());
+        MainActivity.pauseWhenCharging = swPauseWhenCharging.isChecked();
         this.finish();
     }
 
