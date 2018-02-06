@@ -5,10 +5,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.util.Log;
 
-/**
- * Created by dcarlo on 1/23/18.
- */
-
 public class BatteryReceiver extends BroadcastReceiver {
     // Logging
     String logTag = "BatteryReceiver";

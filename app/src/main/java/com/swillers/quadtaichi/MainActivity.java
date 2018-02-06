@@ -19,6 +19,7 @@ import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
+import android.widget.ImageView;
 import android.widget.TextView;
 
 import java.util.Locale;
@@ -29,11 +30,10 @@ import static com.swillers.quadtaichi.R.mipmap.ic_launcher;
 
 public class MainActivity extends AppCompatActivity implements SensorEventListener {
     // Activity vars
-    TextView txtMessage, txtPitch, txtTaiChi;
+    TextView txtMessage, txtTilt, txtTaiChi;
     public static int taiChiInterval; // Interval between pressure releases in seconds
     public static int nagInterval;  // Interval between notifications in minutes
-    public static long tiltThreshold;
-    public static boolean pauseWhenCharging;
+    public static int tiltThreshold;  // Degrees of tilt needed to acheive Tai Chi mode
 
     // Logging
     private final String logTag = "MainActivity";
@@ -51,14 +51,18 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     public long mCurrentPageMinute = -1;  // The minute that
 
     // Charger check stuff
+    public static boolean pauseWhenCharging;
     public static boolean isChargerConnected = false;
+
+    // Notification stuff
+    public static boolean hasNotified = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         txtMessage = this.findViewById(R.id.txtMessage);
-        txtPitch = this.findViewById(R.id.txtPitch);
+        txtTilt = this.findViewById(R.id.txtTilt);
         txtTaiChi = this.findViewById(R.id.txtTaiChi);
         TimerTask timerTask;
         Timer timer;
@@ -68,21 +72,9 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         // Load preferences
         SharedPreferences sharedPref = getSharedPreferences("taiChiPrefs", Context.MODE_PRIVATE);
-        if (sharedPref.getInt("taiChiInterval", 0) == 0) {
-            taiChiInterval = 45;
-        } else {
-            taiChiInterval = sharedPref.getInt("taiChiInterval",0);
-        }
-        if (sharedPref.getInt("nagInterval", 0) == 0) {
-            nagInterval = 5;
-        } else {
-            nagInterval = sharedPref.getInt("nagInterval",0);
-        }
-        if (sharedPref.getInt("tiltThreshold", 0) == 0) {
-            tiltThreshold = 5;
-        } else {
-            tiltThreshold = sharedPref.getInt("tiltThreshold",0);
-        }
+        taiChiInterval = sharedPref.getInt("taiChiInterval",45);
+        nagInterval = sharedPref.getInt("nagInterval",5);
+        tiltThreshold = sharedPref.getInt("tiltThreshold",30);
         pauseWhenCharging = sharedPref.getBoolean("pauseWhenCharging",true);
 
         taiChiTime = System.currentTimeMillis() + (1000 * 60 * taiChiInterval);
@@ -104,17 +96,98 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         // Check initial charger status. BatteryReceiver takes over after this
         Intent intent = this.registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
-        int plugged = intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, -1);
-        isChargerConnected = plugged == BatteryManager.BATTERY_PLUGGED_AC || plugged == BatteryManager.BATTERY_PLUGGED_USB;
-        if (Build.VERSION.SDK_INT > Build.VERSION_CODES.JELLY_BEAN)
-        {
-            isChargerConnected = isChargerConnected || plugged == BatteryManager.BATTERY_PLUGGED_WIRELESS;
+        if (intent != null) {
+            int plugged = intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, -1);
+            isChargerConnected = plugged == BatteryManager.BATTERY_PLUGGED_AC || plugged == BatteryManager.BATTERY_PLUGGED_USB;
+            if (Build.VERSION.SDK_INT > Build.VERSION_CODES.JELLY_BEAN) {
+                isChargerConnected = isChargerConnected || plugged == BatteryManager.BATTERY_PLUGGED_WIRELESS;
+            }
+        } else {
+            isChargerConnected = true;
         }
-
 
         Log.d(logTag, "onCreate");
 
     }
+
+    @Override
+    public void onBackPressed() {
+        moveTaskToBack(true);
+        // this.finish();  // close app
+    }
+
+    // Display settings activy
+    public void showSettings(View view) {
+        Intent intent = new Intent(this, SettingsActivity.class);
+        startActivity(intent);
+    }
+
+    public void exit(View view) {
+        System.exit(0);
+        // android.os.Process.killProcess(android.os.Process.myPid());
+    }
+
+    private void TimerMethod() {
+        this.runOnUiThread(Timer_Tick);
+    }
+    private Runnable Timer_Tick = new Runnable() {
+        @Override
+        public void run() {
+            long mNow = System.currentTimeMillis();
+            long mSecDiff = (mNow - taiChiTime) / 1000;  // number of seconds before/after taiChiTime
+            long mMinDiff = mSecDiff / 60;  // number of minutes before/after taiChiTime
+            String mStatus;
+
+            if (isChargerConnected && pauseWhenCharging) {  // "pause" Tai Chi when charger connected and pauseWhenCharging is true
+                txtMessage.setTextColor(Color.BLACK);
+                txtMessage.setText("Charger connected\nTai Chi on pause");
+                taiChiTime = mNow + (1000 * 60 * taiChiInterval);
+                txtTaiChi.setVisibility(View.INVISIBLE);
+                cancelNotification();
+                adjustChairImage(pitch, "green");
+            } else {
+                if (mSecDiff > 0) {  // Are we past due for Tai Chi?
+                    txtMessage.setTextColor(Color.parseColor("#740411"));
+                    txtMessage.setText(String.format(Locale.US, "Tai Chi overdue by %02d:%02d", mSecDiff / 60, mSecDiff % 60));
+
+                    // Set notification every nagInterval minutes
+                    if (mMinDiff % nagInterval == 0) {    // Is this the time to send a message?
+                        if (mCurrentPageMinute != mMinDiff) {   // Have we paged on this minute yet?  Needed b/c timer is unreliable whnen sleeping
+                            showNotification(mSecDiff);
+                            mCurrentPageMinute = mMinDiff;
+                            hasNotified = true;
+                        }
+                    }
+                    adjustChairImage(pitch, "red");
+                } else {
+                    txtMessage.setText(String.format(Locale.US, "Tai Chi due in: %02d:%02d", -mSecDiff / 60, -mSecDiff % 60));
+                    txtMessage.setTextColor(Color.BLACK);
+                    cancelNotification();
+                    adjustChairImage(pitch, "blue");
+                }
+
+                if (tiltThreshold < pitch) {  // Is the phone tilted in Tai Chi mode
+                    if (fullTiltTime == 0) {  // Is fullTiltTime uninitalized?
+                        fullTiltTime = mNow + (1000 * 60);  // Tai Chi will finish in 60 seconds from now
+                    }
+                    if (fullTiltTime < mNow) {   // Is Tai Chi done?
+                        // Log.d(logTag, "Resetting: "+taiChiInterval);
+                        taiChiTime = mNow + (1000 * 60 * taiChiInterval) + 1200;   // Set the new taiChiTime (now + taiChiInterval + 1-ish second)
+                        mStatus = "Tai Chi Complete!";
+                    } else {
+                        mStatus = String.format(Locale.US, "Tai Chi in progress\nWill complete in: %02d:%02d", (fullTiltTime - mNow) / 1000 / 60, (fullTiltTime - mNow) / 1000 % 60);
+                    }
+                    txtTaiChi.setVisibility(View.VISIBLE);
+                    txtTaiChi.setText(mStatus);
+                    adjustChairImage(pitch, "green");
+                } else {
+                    txtTaiChi.setVisibility(View.INVISIBLE);
+                    fullTiltTime = 0;
+                }
+            }
+            txtTilt.setText(String.format(Locale.US,"Tilt: %.2f\u00B0",pitch));
+        }
+    };
 
     // Display a notification that Tai Chi is overdue by 'overdue' seconds
     public void showNotification(long overdue){
@@ -158,83 +231,38 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         }
     }
 
-    @Override
-    public void onBackPressed() {
-        moveTaskToBack(true);
-        // this.finish();  // close app
-    }
-
-    // Display settings activy
-    public void showSettings(View view) {
-        Intent intent = new Intent(this, SettingsActivity.class);
-        startActivity(intent);
-    }
-
-    public void exit(View view) {
-        System.exit(0);
-        // android.os.Process.killProcess(android.os.Process.myPid());
-    }
-
-    private void TimerMethod() {
-        this.runOnUiThread(Timer_Tick);
-    }
-    private Runnable Timer_Tick = new Runnable() {
-        @Override
-        public void run() {
-            long mNow = System.currentTimeMillis();
-            long mSecDiff = (mNow - taiChiTime) / 1000;  // number of seconds before/after taiChiTime
-            long mMinDiff = mSecDiff / 60;  // number of minutes before/after taiChiTime
-            String mStatus;
-
-            if (isChargerConnected && pauseWhenCharging) {  // "pause" Tai Chi when charger connected and pauseWhenCharging is true
-                txtMessage.setTextColor(Color.BLACK);
-                txtMessage.setText("Charger connected\nTai Chi on pause");
-                taiChiTime = mNow + (1000 * 60 * taiChiInterval);
-                txtTaiChi.setVisibility(View.INVISIBLE);
-            } else {
-                if (mSecDiff > 0) {
-                    txtMessage.setTextColor(Color.RED);
-                    txtMessage.setText(String.format(Locale.US, "Tai Chi overdue by %02d:%02d", mSecDiff / 60, mSecDiff % 60));
-
-                    // Set notification every nagInterval minutes
-                    if (mMinDiff % nagInterval == 0) {    // Is this the time to send a message?
-                        if (mCurrentPageMinute != mMinDiff) {   // Have we paged on this minute yet?  Needed b/c timer is unreliable whnen sleeping
-                            showNotification(mSecDiff);
-                            mCurrentPageMinute = mMinDiff;
-                        }
-                    }
-                } else {
-                    txtMessage.setText(String.format(Locale.US, "Tai Chi due in: %02d:%02d", -mSecDiff / 60, -mSecDiff % 60));
-                    txtMessage.setTextColor(Color.BLACK);
-
-                    // Cancel notification
-                    NotificationManager notiMgr = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-                    if (notiMgr != null) {
-                        notiMgr.cancel(999);
-                    }
-                }
-
-                if (tiltThreshold < pitch) {  // Is the phone tilted in Tai Chi mode
-                    if (fullTiltTime == 0) {  // Is fullTiltTime uninitalized?
-                        fullTiltTime = mNow + (1000 * 60);  // Tai Chi will finish in 60 seconds from now
-                    }
-                    if (fullTiltTime < mNow) {   // Is Tai Chi done?
-                        // Log.d(logTag, "Resetting: "+taiChiInterval);
-                        taiChiTime = mNow + (1000 * 60 * taiChiInterval) + 1200;   // Set the new taiChiTime (now + taiChiInterval + 1-ish second)
-                        mStatus = "Tai Chi Complete!";
-                    } else {
-                        mStatus = String.format(Locale.US, "Tai Chi in progress\nWill complete in: %02d:%02d", (fullTiltTime - mNow) / 1000 / 60, (fullTiltTime - mNow) / 1000 % 60);
-                    }
-                    txtTaiChi.setVisibility(View.VISIBLE);
-                    txtTaiChi.setText(mStatus);
-                } else {
-                    txtTaiChi.setVisibility(View.INVISIBLE);
-                    fullTiltTime = 0;
-                }
+    private void cancelNotification () {
+        // Cancel notification
+        if (hasNotified) {
+            NotificationManager notiMgr = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+            if (notiMgr != null) {
+                notiMgr.cancel(999);
+                hasNotified = false;
+                Log.d(logTag, "Canceling notification");
             }
-            txtPitch.setText(String.format(Locale.US,"Tilt: %.2f\u00B0",pitch));
         }
-    };
+    }
+
+    private void adjustChairImage(float pitch, String color) {
+
+        // Tilt the wheelchair image
+        ImageView imageView = findViewById(R.id.imgWheelChair);
+        imageView.setRotation(pitch);
+        switch (color) {
+            case "red":
+                imageView.setImageResource(R.drawable.img_wheelchair_red);
+                break;
+            case "green":
+                imageView.setImageResource(R.drawable.img_wheelchair_green);
+                break;
+            case "blue":
+                imageView.setImageResource(R.drawable.img_wheelchair_blue);
+                break;
+            default:
+                imageView.setImageResource(R.drawable.img_wheelchair_blue);
+                break;
+        }
+    }
 
 
     public class MyTimerTask extends TimerTask {

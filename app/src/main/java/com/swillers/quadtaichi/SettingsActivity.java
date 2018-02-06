@@ -8,7 +8,7 @@ import android.util.Log;
 import android.view.View;
 import android.widget.EditText;
 import android.widget.Switch;
-import android.widget.TextView;
+import java.util.Locale;
 
 public class SettingsActivity extends AppCompatActivity {
 EditText editInterval, editNag, editTiltThreshold;
@@ -19,30 +19,17 @@ Switch swPauseWhenCharging;
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_settings);
 
-        editInterval = (EditText) this.findViewById(R.id.editInterval);
-        editNag = (EditText) this.findViewById(R.id.editNag);
-        editTiltThreshold = (EditText) this.findViewById(R.id.editTiltThreshold);
-        swPauseWhenCharging = (Switch) this.findViewById(R.id.swPauseOnCharge);
+        editInterval = this.findViewById(R.id.editInterval);
+        editNag = this.findViewById(R.id.editNag);
+        editTiltThreshold = this.findViewById(R.id.editTiltThreshold);
+        swPauseWhenCharging = this.findViewById(R.id.swPauseOnCharge);
         SharedPreferences sharedPref = getSharedPreferences("taiChiPrefs", Context.MODE_PRIVATE);
         // Log.d("Settings","Interval: "+sharedPref.getInt("taiChiInterval", 0));
 
         // Populate inputs
-        if (sharedPref.getInt("taiChiInterval", 0) == 0) {
-            editInterval.setText("45");
-            // Log.d("Settings","Going default");
-        } else {
-            editInterval.setText(String.valueOf(sharedPref.getInt("taiChiInterval",0)));
-        }
-        if (sharedPref.getInt("nagInterval", 0) == 0) {
-            editNag.setText("5");
-        } else {
-            editNag.setText(String.valueOf(sharedPref.getInt("nagInterval",0)));
-        }
-        if (sharedPref.getInt("tiltThreshold", 0) == 0) {
-            editTiltThreshold.setText("30");
-        } else {
-            editTiltThreshold.setText(String.valueOf(sharedPref.getInt("tiltThreshold",0)));
-        }
+        editInterval.setText(String.format(Locale.US, "%d",MainActivity.taiChiInterval));
+        editNag.setText(String.format(Locale.US, "%d",MainActivity.nagInterval));
+        editTiltThreshold.setText(String.format(Locale.US, "%d",MainActivity.tiltThreshold));
         swPauseWhenCharging.setChecked(sharedPref.getBoolean("pauseWhenCharging", true));
     }
 
@@ -54,10 +41,10 @@ Switch swPauseWhenCharging;
         editor.putInt("tiltThreshold", Integer.parseInt(editTiltThreshold.getText().toString()));
         editor.putBoolean("pauseWhenCharging", swPauseWhenCharging.isChecked());
         editor.apply();
-        // Log.d("Settings","Saving "+editInterval.getText());
+
+        Log.d("Settings","Saving Settings");
         MainActivity.taiChiInterval = Integer.parseInt(editInterval.getText().toString());
         MainActivity.taiChiTime = System.currentTimeMillis() + (1000 * 60 * MainActivity.taiChiInterval);
-
         MainActivity.nagInterval = Integer.parseInt(editNag.getText().toString());
         MainActivity.tiltThreshold = Integer.parseInt(editTiltThreshold.getText().toString());
         MainActivity.pauseWhenCharging = swPauseWhenCharging.isChecked();
