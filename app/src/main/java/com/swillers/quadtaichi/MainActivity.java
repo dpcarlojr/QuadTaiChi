@@ -56,6 +56,9 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
     // Notification stuff
     public static boolean hasNotified = false;
+    public NotificationManager notificationManager;
+    public PendingIntent pendingNotificationIntent;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -106,7 +109,21 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             isChargerConnected = true;
         }
 
-        Log.d(logTag, "onCreate");
+        // Setup Notifications
+        Intent notificationIntent = new Intent(this, MainActivity.class);
+        pendingNotificationIntent = PendingIntent.getActivity(this, 0, notificationIntent, 0);
+        notificationManager = (NotificationManager)getSystemService(NOTIFICATION_SERVICE);
+        if (Build.VERSION.SDK_INT >= 26) {  // Oreo needs notification channels
+            NotificationChannel mChannel = new NotificationChannel("qtc_channel",
+                    "Quad Tai Chi Channel",
+                    NotificationManager.IMPORTANCE_DEFAULT);
+            mChannel.setDescription("Notifies users when Tai Chi is due");
+            if (notificationManager != null) {
+                notificationManager.createNotificationChannel(mChannel);
+            }
+        }
+
+            Log.d(logTag, "onCreate");
 
     }
 
@@ -151,7 +168,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                     txtMessage.setText(String.format(Locale.US, "Tai Chi overdue by %02d:%02d", mSecDiff / 60, mSecDiff % 60));
 
                     // Set notification every nagInterval minutes
-                    if (mMinDiff % nagInterval == 0) {    // Is this the time to send a message?
+                    if (mMinDiff % nagInterval == 0 || mMinDiff == 0) {    // Is this the time to send a message?
                         if (mCurrentPageMinute != mMinDiff) {   // Have we paged on this minute yet?  Needed b/c timer is unreliable whnen sleeping
                             showNotification(mSecDiff);
                             mCurrentPageMinute = mMinDiff;
@@ -192,51 +209,43 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     // Display a notification that Tai Chi is overdue by 'overdue' seconds
     public void showNotification(long overdue){
         long[] vibrate = {100,200,100,200};
-        Intent intent = new Intent(this, MainActivity.class);
-        PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent, 0);
+        // Intent intent = new Intent(this, MainActivity.class);
+        // PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent, 0);
         String notiTitle = "Tai Chi Time!";
         String notiText = String.format(Locale.US,"Tai Chi is overdue by %d minutes",overdue / 60);
+        Notification mNotification;
+        Notification.Builder mBuilder;
 
-        NotificationManager notiMgr = (NotificationManager)getSystemService(NOTIFICATION_SERVICE);
+        // NotificationManager notiMgr = (NotificationManager)getSystemService(NOTIFICATION_SERVICE);
         if (Build.VERSION.SDK_INT >= 26) {  // Oreo needs notification channels
-            NotificationChannel mChannel = new NotificationChannel("qtc_channel","Quad Tai Chi Channel", NotificationManager.IMPORTANCE_DEFAULT);
-            mChannel.setDescription("Notifies users when Tai Chi is due");
-            if (notiMgr != null) {
-                notiMgr.createNotificationChannel(mChannel);
-            }
-            Notification.Builder builder = new Notification.Builder(this, "qtc_channel")
+            mBuilder = new Notification.Builder(this, "qtc_channel")
                     .setSmallIcon(ic_launcher)
                     .setContentTitle(notiTitle)
                     .setContentText(notiText)
-                    .setAutoCancel(true)
-                    .setContentIntent(pendingIntent);
-            Notification noti = builder.build();
-            if (notiMgr != null) {
-                notiMgr.notify(999, noti);
-            }
+                    .setContentIntent(pendingNotificationIntent)
+                    .setAutoCancel(true);
         } else {
-            Notification noti = new Notification.Builder(this)
+            mBuilder = new Notification.Builder(this)
                     .setSmallIcon(ic_launcher)
                     .setContentTitle(notiTitle)
                     .setContentText(notiText)
+                    .setContentIntent(pendingNotificationIntent)
                     .setAutoCancel(true)
-                    .setContentIntent(pendingIntent)
                     .setDefaults(Notification.DEFAULT_SOUND)
-                    .setVibrate(vibrate)
-                    .build();
+                    .setVibrate(vibrate);
+        }
+        mNotification = mBuilder.build();
 
-            if (notiMgr != null) {
-                notiMgr.notify(999, noti);
-            }
+        if (notificationManager != null) {
+            notificationManager.notify(999, mNotification);
         }
     }
 
     private void cancelNotification () {
         // Cancel notification
         if (hasNotified) {
-            NotificationManager notiMgr = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-            if (notiMgr != null) {
-                notiMgr.cancel(999);
+            if (notificationManager != null) {
+                notificationManager.cancel(999);
                 hasNotified = false;
                 Log.d(logTag, "Canceling notification");
             }

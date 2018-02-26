@@ -13,8 +13,8 @@ android {
         applicationId "com.swillers.quadtaichi"
         minSdkVersion 16
         targetSdkVersion 26
-        versionCode 19
-        versionName "1.19"
+        versionCode 21
+        versionName "1.21"
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
     }
