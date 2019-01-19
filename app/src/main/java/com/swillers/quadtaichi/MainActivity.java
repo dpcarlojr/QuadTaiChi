@@ -4,6 +4,7 @@ import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
@@ -133,7 +134,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         // this.finish();  // close app
     }
 
-    // Display settings activy
+    // Display settings activity
     public void showSettings(View view) {
         Intent intent = new Intent(this, SettingsActivity.class);
         startActivity(intent);
@@ -211,6 +212,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         long[] vibrate = {100,200,100,200};
         // Intent intent = new Intent(this, MainActivity.class);
         // PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent, 0);
+        cancelNotification();
         String notiTitle = "Tai Chi Time!";
         String notiText = String.format(Locale.US,"Tai Chi is overdue by %d minutes",overdue / 60);
         Notification mNotification;
