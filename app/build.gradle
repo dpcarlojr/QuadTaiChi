@@ -3,9 +3,7 @@ apply plugin: 'com.android.application'
 android {
     signingConfigs {
         config {
-            keyPassword 'qxzwAndr01d.'
             storeFile file('/Users/dcarlo/AndroidStudioProjects/DevResources/android.jks')
-            storePassword 'qxzwAndr01d.'
         }
     }
     compileSdkVersion 28
@@ -13,8 +11,8 @@ android {
         applicationId "com.swillers.quadtaichi"
         minSdkVersion 16
         targetSdkVersion 28
-        versionCode 22
-        versionName "1.23.0"
+        versionCode 27
+        versionName "1.21.27"
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
     }

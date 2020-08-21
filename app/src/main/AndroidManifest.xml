@@ -10,34 +10,27 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
+        <service
+            android:name=".TimerService"
+            android:enabled="true"/>
+
         <activity
             android:name=".MainActivity"
             android:launchMode="singleTop">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
-
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-
                 <data
-                    android:scheme="https"
                     android:host="www.tivora.com"
-                    android:pathPattern="/QuadTaiChi" />
+                    android:pathPattern="/QuadTaiChi"
+                    android:scheme="https" />
             </intent-filter>
         </activity>
         <activity android:name=".SettingsActivity" />
-
-        <receiver android:name=".BatteryReceiver">
-            <intent-filter>
-                <action android:name="android.intent.action.ACTION_POWER_CONNECTED" />
-                <action android:name="android.intent.action.ACTION_POWER_DISCONNECTED" />
-            </intent-filter>
-        </receiver>
     </application>
-
 </manifest>
