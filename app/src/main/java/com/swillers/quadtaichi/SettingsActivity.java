@@ -27,9 +27,9 @@ Switch swPauseWhenCharging;
         // Log.d("Settings","Interval: "+sharedPref.getInt("taiChiInterval", 0));
 
         // Populate inputs
-        editInterval.setText(String.format(Locale.US, "%d",MainActivity.taiChiInterval));
-        editNag.setText(String.format(Locale.US, "%d",MainActivity.nagInterval));
-        editTiltThreshold.setText(String.format(Locale.US, "%d",MainActivity.tiltThreshold));
+        editInterval.setText(String.format(Locale.US, "%d",TimerService.taiChiInterval));
+        editNag.setText(String.format(Locale.US, "%d",TimerService.nagInterval));
+        editTiltThreshold.setText(String.format(Locale.US, "%d",TimerService.tiltThreshold));
         swPauseWhenCharging.setChecked(sharedPref.getBoolean("pauseWhenCharging", true));
     }
 
@@ -43,11 +43,11 @@ Switch swPauseWhenCharging;
         editor.apply();
 
         Log.d("Settings","Saving Settings");
-        MainActivity.taiChiInterval = Integer.parseInt(editInterval.getText().toString());
-        MainActivity.taiChiTime = System.currentTimeMillis() + (1000 * 60 * MainActivity.taiChiInterval);
-        MainActivity.nagInterval = Integer.parseInt(editNag.getText().toString());
-        MainActivity.tiltThreshold = Integer.parseInt(editTiltThreshold.getText().toString());
-        MainActivity.pauseWhenCharging = swPauseWhenCharging.isChecked();
+        TimerService.taiChiInterval = Integer.parseInt(editInterval.getText().toString());
+        TimerService.taiChiTime = System.currentTimeMillis() + (1000 * 60 * TimerService.taiChiInterval);
+        TimerService.nagInterval = Integer.parseInt(editNag.getText().toString());
+        TimerService.tiltThreshold = Integer.parseInt(editTiltThreshold.getText().toString());
+        TimerService.pauseWhenCharging = swPauseWhenCharging.isChecked();
         this.finish();
     }
 
