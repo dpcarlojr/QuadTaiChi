@@ -6,8 +6,9 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.graphics.Color;
 import android.os.BatteryManager;
+import androidx.appcompat.app.AppCompatActivity;
+
 import android.os.Build;
-import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
@@ -21,7 +22,7 @@ public class MainActivity extends AppCompatActivity {
     TextView txtMessage, txtTilt, txtTaiChi;
 
     // Logging
-    final String logTag = "MainActivity";
+    final String TAG = "MainActivity";
 
     //Broadcast Receiver
     MyBroadCastReceiver myBroadCastReceiver;
@@ -45,7 +46,11 @@ public class MainActivity extends AppCompatActivity {
         try {
             IntentFilter intentFilter = new IntentFilter();
             intentFilter.addAction(BROADCAST_ACTION);
-            registerReceiver(myBroadCastReceiver, intentFilter);
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(myBroadCastReceiver, intentFilter, Context.RECEIVER_NOT_EXPORTED);
+            }else {
+                registerReceiver(myBroadCastReceiver, intentFilter, Context.RECEIVER_NOT_EXPORTED);
+            }
         }
         catch (Exception ex) {
             ex.printStackTrace();
@@ -54,13 +59,11 @@ public class MainActivity extends AppCompatActivity {
         chargerReceiver = new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent batteryReceiverIntent) {
-                Log.d(logTag, "Received Change");
+                Log.d(TAG, "Received Change");
                 if (batteryReceiverIntent != null) {
                     int plugged = batteryReceiverIntent.getIntExtra(BatteryManager.EXTRA_PLUGGED, -1);
                     isChargerConnected = plugged == BatteryManager.BATTERY_PLUGGED_AC || plugged == BatteryManager.BATTERY_PLUGGED_USB;
-                    if (Build.VERSION.SDK_INT > Build.VERSION_CODES.JELLY_BEAN) {
-                        isChargerConnected = isChargerConnected || plugged == BatteryManager.BATTERY_PLUGGED_WIRELESS;
-                    }
+                    isChargerConnected = isChargerConnected || plugged == BatteryManager.BATTERY_PLUGGED_WIRELESS;
                 } else {
                     isChargerConnected = true;
                 }
@@ -71,17 +74,20 @@ public class MainActivity extends AppCompatActivity {
                 new IntentFilter(Intent.ACTION_BATTERY_CHANGED)
         );
 
-        startService(new Intent(getBaseContext(), TimerService.class));
+        startForegroundService(new Intent(getBaseContext(), TimerService.class));
 
-        Log.d(logTag, "onCreate");
+        Log.d(TAG, "onCreate");
 
     }
 
-    @Override
+
+    //Not sure if i need this
+    /* @Override
     public void onBackPressed() {
+        super.onBackPressed();
         moveTaskToBack(true);
         // this.finish();  // close app
-    }
+    } */
 
     // Display settings activity
     public void showSettings(View view) {
@@ -106,9 +112,6 @@ public class MainActivity extends AppCompatActivity {
                 break;
             case "green":
                 imageView.setImageResource(R.drawable.img_wheelchair_green);
-                break;
-            case "blue":
-                imageView.setImageResource(R.drawable.img_wheelchair_blue);
                 break;
             default:
                 imageView.setImageResource(R.drawable.img_wheelchair_blue);
@@ -135,7 +138,7 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onReceive(Context context, Intent receiverIntent) {
             try {
-                // Log.d(logTag, "Receiving broadcast");
+                // Log.d(TAG, "Receiving broadcast");
                 Bundle extras = receiverIntent.getExtras();
                 if (extras != null) {
                     action = extras.getString("action");
@@ -151,19 +154,19 @@ public class MainActivity extends AppCompatActivity {
                         txtMessage.setText("Charger connected\nTai Chi on pause");
                         txtTaiChi.setVisibility(View.INVISIBLE);
                         adjustChairImage(pitch, "green");
-                        // Log.d(logTag, "charger on: " + secDiff);
+                        // Log.d(TAG, "charger on: " + secDiff);
                         break;
                     case "past_due":
                         txtMessage.setTextColor(Color.parseColor("#740411"));
                         txtMessage.setText(String.format(Locale.US, "Tai Chi overdue by %02d:%02d", secDiff / 60, secDiff % 60));
                         adjustChairImage(pitch, "red");
-                        // Log.d(logTag, "past due: " + secDiff);
+                        // Log.d(TAG, "past due: " + secDiff);
                         break;
                     case "normal":
                         txtMessage.setText(String.format(Locale.US, "Tai Chi due in: %02d:%02d", -secDiff / 60, -secDiff % 60));
                         txtMessage.setTextColor(Color.BLACK);
                         adjustChairImage(pitch, "blue");
-                        // Log.d(logTag, "normal: " + secDiff);
+                        // Log.d(TAGTAG, "normal: " + secDiff);
                         break;
                 }
                 if (inTaiChiMode) {
@@ -173,7 +176,7 @@ public class MainActivity extends AppCompatActivity {
                 } else {
                     txtTaiChi.setVisibility(View.INVISIBLE);
                 }
-                txtTilt.setText(String.format(Locale.US,"Tilt: %.2f\u00B0",pitch));
+                txtTilt.setText(String.format(Locale.US,"Tilt: %.2f°",pitch));
             }
             catch (Exception ex) {
                 ex.printStackTrace();

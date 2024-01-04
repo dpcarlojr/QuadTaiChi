@@ -2,7 +2,7 @@ package com.swillers.quadtaichi;
 
 import android.content.Context;
 import android.content.SharedPreferences;
-import android.support.v7.app.AppCompatActivity;
+import androidx.appcompat.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
@@ -11,8 +11,9 @@ import android.widget.Switch;
 import java.util.Locale;
 
 public class SettingsActivity extends AppCompatActivity {
-EditText editInterval, editNag, editTiltThreshold;
-Switch swPauseWhenCharging;
+    EditText editInterval, editNag, editTiltThreshold;
+    Switch swPauseWhenCharging;
+    private static final String TAG = "SettingsActivity";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -24,7 +25,7 @@ Switch swPauseWhenCharging;
         editTiltThreshold = this.findViewById(R.id.editTiltThreshold);
         swPauseWhenCharging = this.findViewById(R.id.swPauseOnCharge);
         SharedPreferences sharedPref = getSharedPreferences("taiChiPrefs", Context.MODE_PRIVATE);
-        // Log.d("Settings","Interval: "+sharedPref.getInt("taiChiInterval", 0));
+        // Log.d(TAG,"Interval: "+sharedPref.getInt("taiChiInterval", 0));
 
         // Populate inputs
         editInterval.setText(String.format(Locale.US, "%d",TimerService.taiChiInterval));
@@ -42,9 +43,10 @@ Switch swPauseWhenCharging;
         editor.putBoolean("pauseWhenCharging", swPauseWhenCharging.isChecked());
         editor.apply();
 
-        Log.d("Settings","Saving Settings");
+        Log.d(TAG,"Saving Settings");
+        Log.d(TAG,"TimerService.taiChiTime: "+TimerService.taiChiTime);
         TimerService.taiChiInterval = Integer.parseInt(editInterval.getText().toString());
-        TimerService.taiChiTime = System.currentTimeMillis() + (1000 * 60 * TimerService.taiChiInterval);
+        TimerService.taiChiTime = System.currentTimeMillis() + (1000L * 60 * TimerService.taiChiInterval);
         TimerService.nagInterval = Integer.parseInt(editNag.getText().toString());
         TimerService.tiltThreshold = Integer.parseInt(editTiltThreshold.getText().toString());
         TimerService.pauseWhenCharging = swPauseWhenCharging.isChecked();
