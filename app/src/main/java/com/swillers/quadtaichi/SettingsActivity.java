@@ -3,16 +3,17 @@ package com.swillers.quadtaichi;
 import android.content.Context;
 import android.content.SharedPreferences;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.SwitchCompat;
+
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
 import android.widget.EditText;
-import android.widget.Switch;
 import java.util.Locale;
 
 public class SettingsActivity extends AppCompatActivity {
-    EditText editInterval, editNag, editTiltThreshold;
-    Switch swPauseWhenCharging;
+    EditText editInterval, editNag, editTiltThreshold, editTaiChiDuration;
+    SwitchCompat swPauseWhenCharging;
     private static final String TAG = "SettingsActivity";
 
     @Override
@@ -23,6 +24,7 @@ public class SettingsActivity extends AppCompatActivity {
         editInterval = this.findViewById(R.id.editInterval);
         editNag = this.findViewById(R.id.editNag);
         editTiltThreshold = this.findViewById(R.id.editTiltThreshold);
+        editTaiChiDuration = this.findViewById(R.id.editTaiChiDuration);
         swPauseWhenCharging = this.findViewById(R.id.swPauseOnCharge);
         SharedPreferences sharedPref = getSharedPreferences("taiChiPrefs", Context.MODE_PRIVATE);
         // Log.d(TAG,"Interval: "+sharedPref.getInt("taiChiInterval", 0));
@@ -31,6 +33,7 @@ public class SettingsActivity extends AppCompatActivity {
         editInterval.setText(String.format(Locale.US, "%d",TimerService.taiChiInterval));
         editNag.setText(String.format(Locale.US, "%d",TimerService.nagInterval));
         editTiltThreshold.setText(String.format(Locale.US, "%d",TimerService.tiltThreshold));
+        editTaiChiDuration.setText(String.format(Locale.US, "%d",TimerService.taiChiDuration));
         swPauseWhenCharging.setChecked(sharedPref.getBoolean("pauseWhenCharging", true));
     }
 
@@ -40,6 +43,7 @@ public class SettingsActivity extends AppCompatActivity {
         editor.putInt("taiChiInterval", Integer.parseInt(editInterval.getText().toString()));
         editor.putInt("nagInterval", Integer.parseInt(editNag.getText().toString()));
         editor.putInt("tiltThreshold", Integer.parseInt(editTiltThreshold.getText().toString()));
+        editor.putInt("taiChiDuration", Integer.parseInt(editTaiChiDuration.getText().toString()));
         editor.putBoolean("pauseWhenCharging", swPauseWhenCharging.isChecked());
         editor.apply();
 
@@ -49,6 +53,7 @@ public class SettingsActivity extends AppCompatActivity {
         TimerService.taiChiTime = System.currentTimeMillis() + (1000L * 60 * TimerService.taiChiInterval);
         TimerService.nagInterval = Integer.parseInt(editNag.getText().toString());
         TimerService.tiltThreshold = Integer.parseInt(editTiltThreshold.getText().toString());
+        TimerService.taiChiDuration = Integer.parseInt(editTaiChiDuration.getText().toString());
         TimerService.pauseWhenCharging = swPauseWhenCharging.isChecked();
         this.finish();
     }

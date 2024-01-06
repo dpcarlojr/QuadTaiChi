@@ -5,4 +5,12 @@
     <string name="button_exit">Exit</string>
     <string name="channel_name">qtc_channel_01</string>
     <string name="image_wheelchair">Wheelchair</string>
+    <string name="txtNagInterval">Time between notifications\n(minutes):</string>
+    <string name="txtInterval">Time between Tai Chi\'s\n(minutes):</string>
+    <string name="editTiltThreshold">40</string>
+    <string name="txtTiltThreshold">Tai Chi tilt threshold\n(degrees):</string>
+    <string name="txtTaiChiDuration">Tai Chi tilt duration\n(minutes):</string>
+    <string name="txtPauseOnCharge">Pause App When\nCharger Connected?</string>
+    <string name="btnSave">Save</string>
+    <string name="btnCancel">Cancel</string>
 </resources>

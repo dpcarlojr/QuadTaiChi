@@ -5,7 +5,6 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
-import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
@@ -15,7 +14,6 @@ import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.os.Binder;
-import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.provider.Settings;
@@ -27,12 +25,10 @@ import java.util.TimerTask;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.appcompat.app.AlertDialog;
 import androidx.core.app.ActivityCompat;
 import androidx.core.app.JobIntentService;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
-import androidx.core.app.ServiceCompat;
 
 import static com.swillers.quadtaichi.MainActivity.isChargerConnected;
 
@@ -53,6 +49,7 @@ public class TimerService extends JobIntentService implements SensorEventListene
     public static int taiChiInterval; // Interval between pressure releases in seconds
     public static int nagInterval;  // Interval between notifications in minutes
     public static int tiltThreshold;  // Degrees of tilt needed to achieve Tai Chi mode
+    public static int taiChiDuration;  // Duration of tai chi before timer resets
 
     // Logging
     final String TAG = "TimerService";
@@ -72,7 +69,6 @@ public class TimerService extends JobIntentService implements SensorEventListene
 
     // Notification stuff
     private static final int STATUS_NOTIFICATION_ID = 2;
-    public NotificationManager notificationManager;
     public final String CHANNEL_NAME = "qtc_channel";
     public static boolean pauseWhenCharging;
     public boolean inTaiChiMode = false;
@@ -88,13 +84,12 @@ public class TimerService extends JobIntentService implements SensorEventListene
         super.onCreate();
         Log.d(TAG, "onCreate: ");
 
-        boolean timerRunning = false;
-
         // Load preferences
         SharedPreferences sharedPref = getSharedPreferences("taiChiPrefs", Context.MODE_PRIVATE);
         taiChiInterval = sharedPref.getInt("taiChiInterval", 45);
         nagInterval = sharedPref.getInt("nagInterval", 5);
         tiltThreshold = sharedPref.getInt("tiltThreshold", 30);
+        taiChiDuration = sharedPref.getInt("taiChiDuration", 2);
         pauseWhenCharging = sharedPref.getBoolean("pauseWhenCharging", true);
 
         Intent notificationIntent = new Intent(this, TimerService.class);
@@ -132,8 +127,8 @@ public class TimerService extends JobIntentService implements SensorEventListene
             } else {
                 // Log.d(TAG, "tiltThreshold=" + tiltThreshold + " and pitch="+pitch);
                 if (tiltThreshold < pitch) {  // Is the phone tilted in Tai Chi mode
-                    if (fullTiltTime == 0) {  // Is fullTiltTime uninitalized?
-                        fullTiltTime = mNow + (1000 * 60);  // Tai Chi will finish in 60 seconds from now
+                    if (fullTiltTime == 0) {  // Is fullTiltTime uninitialized?
+                        fullTiltTime = mNow + (1000L * taiChiDuration * 60);  // Tai Chi will finish in {taiChiDuration} minutes from now
                     }
                     if (fullTiltTime < mNow) {   // Is Tai Chi done?
                         // Log.d(TAG, "Resetting: "+taiChiInterval);
@@ -149,7 +144,7 @@ public class TimerService extends JobIntentService implements SensorEventListene
                 }
 
                 if (mSecDiff > 0) {  // Are we past due for Tai Chi?
-                    Log.d(TAG, "Tai Chi Due. mNotificationMinute=" + mNotificationMinute + " and mMinDiff="+ mMinDiff);
+                    //Log.d(TAG, "Tai Chi Due. mNotificationMinute=" + mNotificationMinute + " and mMinDiff="+ mMinDiff);
                     if (!isTaiChiDue) {  // Send a single popup notification when Tai Chi is due
                         createPopupNotification("Tai Chi is due!");
                     }
@@ -165,7 +160,7 @@ public class TimerService extends JobIntentService implements SensorEventListene
                     }
                     sendActivityBroadCast("past_due", pitch, mSecDiff, inTaiChiMode, mStatus);
                 } else {
-                    Log.d(TAG, "Tai Chi NOT Due. mNotificationMinute=" + mNotificationMinute + " and mMinDiff="+ mMinDiff);
+                    //Log.d(TAG, "Tai Chi NOT Due. mNotificationMinute=" + mNotificationMinute + " and mMinDiff="+ mMinDiff);
                     isTaiChiDue = false;
                     if (mNotificationMinute != mMinDiff) {   // Have we updated the notification on this minute yet?
                         updateStatusNotification(String.format(Locale.US, "Tai Chi due in %d minutes", mMinDiff * -1));
@@ -208,14 +203,6 @@ public class TimerService extends JobIntentService implements SensorEventListene
 
     }
 
-    private void cancelNotification() {
-        // Cancel notification
-        if (notificationManager != null) {
-            notificationManager.cancel(STATUS_NOTIFICATION_ID);
-            Log.d(TAG, "Canceling notification");
-        }
-    }
-
     private void createNotificationChannel() {
         NotificationChannel channel = new NotificationChannel(
                 CHANNEL_NAME, notificationTitle, NotificationManager.IMPORTANCE_HIGH);
@@ -239,8 +226,11 @@ public class TimerService extends JobIntentService implements SensorEventListene
         builder.setPriority(NotificationCompat.PRIORITY_HIGH);
         builder.setDefaults(Notification.DEFAULT_SOUND | Notification.DEFAULT_VIBRATE);
         builder.setContentIntent(pendingIntent);
+        //builder.setColorized(true);
         if (isTaiChiDue) {
             builder.setColor(Color.RED);
+        } else {
+            builder.setColor(Color.GREEN);
         }
         //builder.setVibrate(vibrate);
         builder.setOnlyAlertOnce(true);
@@ -252,6 +242,7 @@ public class TimerService extends JobIntentService implements SensorEventListene
         Log.d(TAG, "Building Popup Notification");
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_NAME);
         builder.setOngoing(false);
+        //builder.setColorized(true);
         builder.setColor(Color.RED);
         builder.setAutoCancel(true);
         builder.setPriority(NotificationCompat.PRIORITY_HIGH);
@@ -269,21 +260,14 @@ public class TimerService extends JobIntentService implements SensorEventListene
         NotificationManagerCompat notificationManager = NotificationManagerCompat.from(this);
         if (notificationManager.areNotificationsEnabled()) {
             if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                // TODO: Consider calling
-                //    ActivityCompat#requestPermissions
-                // here to request the missing permissions, and then overriding
-                //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-                //                                          int[] grantResults)
-                // to handle the case where the user grants the permission. See the documentation
-                // for ActivityCompat#requestPermissions for more details.
-                return;
+                // Notifications permissions denied. We handle this on MainActivity
+                Log.d(TAG, "Missing notification Permissions");
             }
             notificationManager.notify(STATUS_NOTIFICATION_ID, buildStatusNotification(notificationText));
             Log.d(TAG, "Updating Status Notification");
+        } else {
+            Log.d(TAG, "Notifications Disabled");
         }
-    }
-    protected void onHandleIntent(Intent intent) {
-        Log.d(TAG, "Service Start");
     }
 
     private void sendActivityBroadCast(String action, float pitch, long secDiff, boolean inTaiChiMode, String status) {

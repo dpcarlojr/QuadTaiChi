@@ -4,9 +4,14 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.os.BatteryManager;
+
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 
 import android.os.Build;
 import android.os.Bundle;
@@ -14,10 +19,15 @@ import android.util.Log;
 import android.view.View;
 import android.widget.ImageView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import java.util.Locale;
 
+import static android.Manifest.permission.POST_NOTIFICATIONS;
+
 public class MainActivity extends AppCompatActivity {
+    // Notification permission request id
+    private static final int RC_NOTIFICATION = 99;
     // Activity vars
     TextView txtMessage, txtTilt, txtTaiChi;
 
@@ -46,9 +56,10 @@ public class MainActivity extends AppCompatActivity {
         try {
             IntentFilter intentFilter = new IntentFilter();
             intentFilter.addAction(BROADCAST_ACTION);
+
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
                 registerReceiver(myBroadCastReceiver, intentFilter, Context.RECEIVER_NOT_EXPORTED);
-            }else {
+            } else {
                 registerReceiver(myBroadCastReceiver, intentFilter, Context.RECEIVER_NOT_EXPORTED);
             }
         }
@@ -74,20 +85,30 @@ public class MainActivity extends AppCompatActivity {
                 new IntentFilter(Intent.ACTION_BATTERY_CHANGED)
         );
 
+        if (ContextCompat.checkSelfPermission(this, POST_NOTIFICATIONS) == PackageManager.PERMISSION_DENIED) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                Log.d(TAG, "Requesting notification permissions");
+                ActivityCompat.requestPermissions(this, new String[]{POST_NOTIFICATIONS}, RC_NOTIFICATION);
+            }
+        }
         startForegroundService(new Intent(getBaseContext(), TimerService.class));
 
         Log.d(TAG, "onCreate");
 
     }
 
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
 
-    //Not sure if i need this
-    /* @Override
-    public void onBackPressed() {
-        super.onBackPressed();
-        moveTaskToBack(true);
-        // this.finish();  // close app
-    } */
+        if (requestCode == RC_NOTIFICATION) {
+            if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                Toast.makeText(this, "Allowed", Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(this, "Denied", Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
 
     // Display settings activity
     public void showSettings(View view) {
