@@ -226,13 +226,11 @@ public class TimerService extends JobIntentService implements SensorEventListene
         builder.setPriority(NotificationCompat.PRIORITY_HIGH);
         builder.setDefaults(Notification.DEFAULT_SOUND | Notification.DEFAULT_VIBRATE);
         builder.setContentIntent(pendingIntent);
-        //builder.setColorized(true);
         if (isTaiChiDue) {
             builder.setColor(Color.RED);
         } else {
             builder.setColor(Color.GREEN);
         }
-        //builder.setVibrate(vibrate);
         builder.setOnlyAlertOnce(true);
         builder.setSound(Settings.System.DEFAULT_NOTIFICATION_URI);
         return builder.build();
@@ -240,9 +238,11 @@ public class TimerService extends JobIntentService implements SensorEventListene
 
     private void createPopupNotification(String notificationText) {
         Log.d(TAG, "Building Popup Notification");
+        Intent intent = new Intent(this, MainActivity.class);
+        PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE);
+
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_NAME);
         builder.setOngoing(false);
-        //builder.setColorized(true);
         builder.setColor(Color.RED);
         builder.setAutoCancel(true);
         builder.setPriority(NotificationCompat.PRIORITY_HIGH);
@@ -250,6 +250,7 @@ public class TimerService extends JobIntentService implements SensorEventListene
         builder.setSmallIcon(R.drawable.ic_notification);
         builder.setContentTitle(notificationTitle);
         builder.setContentText(notificationText);
+        builder.setContentIntent(pendingIntent);
 
         NotificationManager mNotificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         mNotificationManager.notify(STATUS_NOTIFICATION_ID, builder.build());
