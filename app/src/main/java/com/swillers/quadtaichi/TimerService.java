@@ -293,7 +293,7 @@ public class TimerService extends JobIntentService implements SensorEventListene
     }
 
     @Override
-    public IBinder onBind(Intent intent) {
+    public IBinder onBind(@NonNull Intent intent) {
         return mBinder;
     }
 
