@@ -45,7 +45,7 @@ public class TimerService extends JobIntentService implements SensorEventListene
 
     private final IBinder mBinder = new LocalBinder();
 
-    // TaiChi vars
+    // TaiChi Preferences
     public static int taiChiInterval; // Interval between pressure releases in seconds
     public static int nagInterval;  // Interval between notifications in minutes
     public static int tiltThreshold;  // Degrees of tilt needed to achieve Tai Chi mode
@@ -76,7 +76,6 @@ public class TimerService extends JobIntentService implements SensorEventListene
     public long mNotificationMinute = -1;  // The minute that we updated notification
     public final String notificationTitle = "Quad Tai Chi";
     public boolean isTaiChiDue = false;
-
 
 
     @Override
@@ -110,7 +109,7 @@ public class TimerService extends JobIntentService implements SensorEventListene
 
         // Setup timer run checks every 1/4 of a second
         timer = new Timer();
-        timer.scheduleAtFixedRate(new mainTask(), 0, 250);
+        timer.schedule(new mainTask(), 0, 250);
         startForeground(STATUS_NOTIFICATION_ID, buildStatusNotification("Quad Tai Chi Running"));
     }
 
