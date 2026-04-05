@@ -8,12 +8,14 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.content.pm.ServiceInfo;
 import android.graphics.Color;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.os.Binder;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.provider.Settings;
@@ -29,6 +31,7 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.app.JobIntentService;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
+import androidx.core.app.ServiceCompat;
 
 import static com.swillers.quadtaichi.MainActivity.isChargerConnected;
 
@@ -110,7 +113,16 @@ public class TimerService extends JobIntentService implements SensorEventListene
         // Setup timer run checks every 1/4 of a second
         timer = new Timer();
         timer.schedule(new mainTask(), 0, 250);
-        startForeground(STATUS_NOTIFICATION_ID, buildStatusNotification("Quad Tai Chi Running"));
+        if (Build.VERSION.SDK_INT >= 34) {
+            ServiceCompat.startForeground(
+                    this,
+                    STATUS_NOTIFICATION_ID,
+                    buildStatusNotification("Quad Tai Chi Running"),
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH
+            );
+        } else {
+            startForeground(STATUS_NOTIFICATION_ID,buildStatusNotification("Quad Tai Chi Running"));
+        }
     }
 
     private class mainTask extends TimerTask {

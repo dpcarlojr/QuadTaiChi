@@ -23,15 +23,18 @@ import android.widget.Toast;
 
 import java.util.Locale;
 
+import static android.Manifest.permission.ACTIVITY_RECOGNITION;
 import static android.Manifest.permission.POST_NOTIFICATIONS;
 
 public class MainActivity extends AppCompatActivity {
     // Notification permission request id
     private static final int RC_NOTIFICATION = 99;
+    // ACTIVITY_RECOGNITION permission request id
+    private static final int RC_ACTIVITY_RECOGNITION = 100;
     // Activity vars
     TextView txtMessage, txtTilt, txtTaiChi;
 
-    // Logging
+    // Logging===
     final String TAG = "MainActivity";
 
     //Broadcast Receiver
@@ -49,15 +52,22 @@ public class MainActivity extends AppCompatActivity {
         txtTilt = this.findViewById(R.id.txtTilt);
         txtTaiChi = this.findViewById(R.id.txtTaiChi);
         BroadcastReceiver chargerReceiver;
+        if (Build.VERSION.SDK_INT > Build.VERSION_CODES.Q) {
+            // Physical Activity Permission
+            int ACTIVITY_PERM = ActivityCompat.checkSelfPermission(MainActivity.this, ACTIVITY_RECOGNITION);
+            if (ACTIVITY_PERM != PackageManager.PERMISSION_GRANTED) {
+                Log.d(TAG, "Requesting ACTIVITY_RECOGNITION permissions");
+                ActivityCompat.requestPermissions(this, new String[]{ACTIVITY_RECOGNITION},RC_ACTIVITY_RECOGNITION);
+            }
 
-
-        // Register Receiver for Service
+        }
+            // Register Receiver for Service
         myBroadCastReceiver = new MyBroadCastReceiver();
         try {
             IntentFilter intentFilter = new IntentFilter();
             intentFilter.addAction(BROADCAST_ACTION);
 
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                 registerReceiver(myBroadCastReceiver, intentFilter, Context.RECEIVER_NOT_EXPORTED);
             } else {
                 registerReceiver(myBroadCastReceiver, intentFilter, Context.RECEIVER_NOT_EXPORTED);
@@ -103,11 +113,20 @@ public class MainActivity extends AppCompatActivity {
 
         if (requestCode == RC_NOTIFICATION) {
             if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                Toast.makeText(this, "Allowed", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "Notifications Allowed", Toast.LENGTH_SHORT).show();
             } else {
-                Toast.makeText(this, "Denied", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "Notifications Denied", Toast.LENGTH_SHORT).show();
             }
         }
+        if (requestCode == RC_ACTIVITY_RECOGNITION) {
+            if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                Toast.makeText(this, "Activity Recognition Allowed", Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(this, "Activity Recognition Denied", Toast.LENGTH_SHORT).show();
+            }
+        }
+        Log.d(TAG, "Request code: "+requestCode);
+
     }
 
     // Display settings activity
@@ -186,8 +205,9 @@ public class MainActivity extends AppCompatActivity {
                     case "normal":
                         txtMessage.setText(String.format(Locale.US, "Tai Chi due in: %02d:%02d", -secDiff / 60, -secDiff % 60));
                         txtMessage.setTextColor(Color.BLACK);
+                        txtMessage.setVisibility(View.VISIBLE);
                         adjustChairImage(pitch, "blue");
-                        // Log.d(TAGTAG, "normal: " + secDiff);
+                        // Log.d(TAG, "normal: " + secDiff);
                         break;
                 }
                 if (inTaiChiMode) {
