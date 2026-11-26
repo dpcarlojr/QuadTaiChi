@@ -3,7 +3,10 @@ apply plugin: 'com.android.application'
 android {
     signingConfigs {
         config {
-            storeFile file('/Users/dcarlo/AndroidStudioProjects/DevResources/android.jks')
+            def ksFile = file('/Users/dcarlo/AndroidStudioProjects/DevResources/android.jks')
+            if (ksFile.exists()) {
+                storeFile ksFile
+            }
         }
     }
     compileSdk = 37
@@ -14,19 +17,19 @@ android {
         versionCode 200
         versionName "2.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-        vectorDrawables.useSupportLibrary = true
     }
     buildTypes {
         release {
             minifyEnabled true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            signingConfig signingConfigs.config
+            def ksFile = file('/Users/dcarlo/AndroidStudioProjects/DevResources/android.jks')
+            if (ksFile.exists()) {
+                signingConfig signingConfigs.config
+            }
         }
         debug {
             debuggable true
         }
-    }
-    productFlavors {
     }
     namespace 'com.swillers.quadtaichi'
 }

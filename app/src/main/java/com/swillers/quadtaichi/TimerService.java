@@ -102,7 +102,6 @@ public class TimerService extends Service implements SensorEventListener {
         pauseWhenCharging = sharedPref.getBoolean("pauseWhenCharging", true);
 
         taiChiTime = System.currentTimeMillis() + (1000L * 60 * taiChiInterval);
-        taiChiTime = System.currentTimeMillis() + (1000L * 60 * taiChiInterval);
         createNotificationChannel();
 
         // Start Foreground Service
@@ -309,7 +308,6 @@ public class TimerService extends Service implements SensorEventListener {
             extras.putString("action", action);
             extras.putFloat("pitch", pitch);
             extras.putLong("secDiff", secDiff);
-            extras.putBoolean("inTaiChiMode", inTaiChiMode);
             extras.putBoolean("inTaiChiMode", inTaiChiMode);
             extras.putString("status", status);
             broadCastIntent.putExtras(extras);
