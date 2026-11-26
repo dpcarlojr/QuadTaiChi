@@ -1,9 +1,11 @@
 package com.swillers.quadtaichi;
 
+import android.Manifest;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -28,58 +30,63 @@ import java.util.TimerTask;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.app.ActivityCompat;
-import androidx.core.app.JobIntentService;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
 import androidx.core.app.ServiceCompat;
 
 import static com.swillers.quadtaichi.MainActivity.isChargerConnected;
 
-public class TimerService extends JobIntentService implements SensorEventListener {
+public class TimerService extends Service implements SensorEventListener {
 
-    @Override
-    public int onStartCommand(@Nullable Intent intent, int flags, int startId) {
-        return START_STICKY;
-    }
+    // Logging
+    private static final String TAG = "TimerService";
 
-    private static class LocalBinder extends Binder {
+    // TaiChi Preferences
+    public static volatile int taiChiInterval; // Interval between pressure releases in seconds
+    public static volatile int nagInterval;   // Interval between notifications in minutes
+    public static volatile int tiltThreshold; // Degrees of tilt needed to achieve Tai Chi mode
+    public static volatile int taiChiDuration; // Duration of tai chi before timer resets
+    public static volatile boolean pauseWhenCharging;
+    public static volatile long taiChiTime;
+
+    // Sensor vars
+    private static final int FROM_RADS_TO_DEGS = -57;
+    public static final int SENSOR_DELAY = SensorManager.SENSOR_DELAY_NORMAL;
+    private SensorManager mSensorManager;
+    public volatile float pitch;
+    private long fullTiltTime = 0;
+
+    // Preallocated arrays for sensor calculation to avoid GC allocations
+    private final float[] mGravity = new float[3];
+    private final float[] mGeomagnetic = new float[3];
+    private final float[] rotationMatrixR = new float[9];
+    private final float[] rotationMatrixI = new float[9];
+    private final float[] orientationValues = new float[3];
+    private boolean hasGravity = false;
+    private boolean hasGeomagnetic = false;
+
+    // Timing stuff
+    public static Timer timer;
+
+    // Notification stuff
+    private static final int STATUS_NOTIFICATION_ID = 2;
+    public static final String CHANNEL_NAME = "qtc_channel";
+    public volatile boolean inTaiChiMode = false;
+    public long mNotificationMinute = -1;  // The minute that we updated notification
+    public final String notificationTitle = "Quad Tai Chi";
+    public volatile boolean isTaiChiDue = false;
+
+    public static class LocalBinder extends Binder {
 
     }
 
     private final IBinder mBinder = new LocalBinder();
 
-    // TaiChi Preferences
-    public static int taiChiInterval; // Interval between pressure releases in seconds
-    public static int nagInterval;  // Interval between notifications in minutes
-    public static int tiltThreshold;  // Degrees of tilt needed to achieve Tai Chi mode
-    public static int taiChiDuration;  // Duration of tai chi before timer resets
-
-    // Logging
-    final String TAG = "TimerService";
-
-    // Sensor vars
-    public float pitch;
-    private static final int FROM_RADS_TO_DEGS = -57;
-    public int SENSOR_DELAY = 3;
-    Sensor accelerometer;
-    Sensor magnetometer;
-    private long fullTiltTime = 0;
-    SensorManager mSensorManager;
-
-    // Timing stuff
-    public static long taiChiTime;
-    public static Timer timer;
-
-    // Notification stuff
-    private static final int STATUS_NOTIFICATION_ID = 2;
-    public final String CHANNEL_NAME = "qtc_channel";
-    public static boolean pauseWhenCharging;
-    public boolean inTaiChiMode = false;
-    public PendingIntent pendingNotificationIntent;
-    public long mNotificationMinute = -1;  // The minute that we updated notification
-    public final String notificationTitle = "Quad Tai Chi";
-    public boolean isTaiChiDue = false;
-
+    @Override
+    public int onStartCommand(@Nullable Intent intent, int flags, int startId) {
+        startForegroundServiceNotification();
+        return START_STICKY;
+    }
 
     @Override
     public void onCreate() {
@@ -94,124 +101,148 @@ public class TimerService extends JobIntentService implements SensorEventListene
         taiChiDuration = sharedPref.getInt("taiChiDuration", 2);
         pauseWhenCharging = sharedPref.getBoolean("pauseWhenCharging", true);
 
-        Intent notificationIntent = new Intent(this, TimerService.class);
-        pendingNotificationIntent = PendingIntent.getActivity(this, 0, notificationIntent, PendingIntent.FLAG_IMMUTABLE);
-
+        taiChiTime = System.currentTimeMillis() + (1000L * 60 * taiChiInterval);
         taiChiTime = System.currentTimeMillis() + (1000L * 60 * taiChiInterval);
         createNotificationChannel();
+
+        // Start Foreground Service
+        startForegroundServiceNotification();
 
         // Setup Sensors
         mSensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
         if (mSensorManager != null) {
-            accelerometer = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
-            magnetometer = mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
+            Sensor accelerometer = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+            Sensor magnetometer = mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
 
-            mSensorManager.registerListener(this, accelerometer, SENSOR_DELAY);
-            mSensorManager.registerListener(this, magnetometer, SENSOR_DELAY);
+            if (accelerometer != null) {
+                mSensorManager.registerListener(this, accelerometer, SENSOR_DELAY);
+            }
+            if (magnetometer != null) {
+                mSensorManager.registerListener(this, magnetometer, SENSOR_DELAY);
+            }
         }
 
-        // Setup timer run checks every 1/4 of a second
+        // Setup timer run checks every 100th of a second
+        if (timer != null) {
+            timer.cancel();
+        }
         timer = new Timer();
-        timer.schedule(new mainTask(), 0, 250);
-        if (Build.VERSION.SDK_INT >= 34) {
-            ServiceCompat.startForeground(
-                    this,
-                    STATUS_NOTIFICATION_ID,
-                    buildStatusNotification("Quad Tai Chi Running"),
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH
-            );
-        } else {
-            startForeground(STATUS_NOTIFICATION_ID,buildStatusNotification("Quad Tai Chi Running"));
+        timer.schedule(new mainTask(), 0, 100);
+    }
+
+    private void startForegroundServiceNotification() {
+        try {
+            Notification notification = buildStatusNotification("Quad Tai Chi Running", false);
+            if (Build.VERSION.SDK_INT >= 34) {
+                boolean hasActivityRec = ActivityCompat.checkSelfPermission(
+                        this,
+                        Manifest.permission.ACTIVITY_RECOGNITION
+                ) == PackageManager.PERMISSION_GRANTED;
+
+                if (hasActivityRec) {
+                    ServiceCompat.startForeground(
+                            this,
+                            STATUS_NOTIFICATION_ID,
+                            notification,
+                            ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH
+                    );
+                } else {
+                    Log.w(TAG, "ACTIVITY_RECOGNITION permission not granted yet, deferring startForeground");
+                }
+            } else {
+                startForeground(STATUS_NOTIFICATION_ID, notification);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error starting foreground notification", e);
         }
     }
 
     private class mainTask extends TimerTask {
+        @Override
         public void run() {
             long mNow = System.currentTimeMillis();
             long mSecDiff = (mNow - taiChiTime) / 1000;  // number of seconds before/after taiChiTime
             long mMinDiff = mSecDiff / 60;  // number of minutes before/after taiChiTime
-            String mStatus = "";
 
             if (isChargerConnected && pauseWhenCharging) {  // "pause" Tai Chi when charger connected and pauseWhenCharging is true
                 taiChiTime = mNow + (1000L * 60 * taiChiInterval);
                 sendActivityBroadCast("charger_connected", pitch, 0, inTaiChiMode, "");
             } else {
-                // Log.d(TAG, "tiltThreshold=" + tiltThreshold + " and pitch="+pitch);
-                if (tiltThreshold < pitch) {  // Is the phone tilted in Tai Chi mode
+                float currentPitch = pitch;
+                String mStatus;
+                if (tiltThreshold < currentPitch) {  // Is the phone tilted in Tai Chi mode
                     if (fullTiltTime == 0) {  // Is fullTiltTime uninitialized?
                         fullTiltTime = mNow + (1000L * taiChiDuration * 60);  // Tai Chi will finish in {taiChiDuration} minutes from now
                     }
                     if (fullTiltTime < mNow) {   // Is Tai Chi done?
-                        // Log.d(TAG, "Resetting: "+taiChiInterval);
                         taiChiTime = mNow + (1000L * 60 * taiChiInterval) + 1200;   // Set the new taiChiTime (now + taiChiInterval + 1-ish second)
                         mStatus = "Tai Chi Complete!";
                     } else {
-                        mStatus = String.format(Locale.US, "Tai Chi in progress\nWill complete in: %02d:%02d", (fullTiltTime - mNow) / 1000 / 60, (fullTiltTime - mNow) / 1000 % 60);
+                        long remainingSecs = (fullTiltTime - mNow) / 1000;
+                        mStatus = String.format(Locale.US, "Tai Chi in progress\nWill complete in: %02d:%02d", remainingSecs / 60, remainingSecs % 60);
                     }
                     inTaiChiMode = true;
                 } else {
                     fullTiltTime = 0;
                     inTaiChiMode = false;
+                    mStatus = "";
                 }
 
                 if (mSecDiff > 0) {  // Are we past due for Tai Chi?
-                    //Log.d(TAG, "Tai Chi Due. mNotificationMinute=" + mNotificationMinute + " and mMinDiff="+ mMinDiff);
-                    if (!isTaiChiDue) {  // Send a single popup notification when Tai Chi is due
-                        createPopupNotification("Tai Chi is due!");
-                    }
+                    boolean shouldAlert = !isTaiChiDue;
                     isTaiChiDue = true;
                     if (mNotificationMinute != mMinDiff) {   // Have we notified on this minute yet?
-                        if (mMinDiff % nagInterval == 0 || mMinDiff == 0) {    // Is this the time to send a popup message?
-                            createPopupNotification(String.format(Locale.US, "Tai Chi is overdue by %d minutes", mMinDiff));
-                            mNotificationMinute = mMinDiff;
+                        if (mMinDiff % nagInterval == 0 || mMinDiff == 0) {
+                            updateStatusNotification(String.format(Locale.US, "Tai Chi is overdue by %d minutes", mMinDiff), shouldAlert);
                         } else {
-                            updateStatusNotification(String.format(Locale.US, "Tai Chi is overdue by %d minutes", mMinDiff));
-                            mNotificationMinute = mMinDiff;
+                            updateStatusNotification(String.format(Locale.US, "Tai Chi is overdue by %d minutes", mMinDiff), false);
                         }
+                        mNotificationMinute = mMinDiff;
+                    } else if (shouldAlert) {
+                        updateStatusNotification("Tai Chi is due!", true);
                     }
-                    sendActivityBroadCast("past_due", pitch, mSecDiff, inTaiChiMode, mStatus);
+                    sendActivityBroadCast("past_due", currentPitch, mSecDiff, inTaiChiMode, mStatus);
                 } else {
-                    //Log.d(TAG, "Tai Chi NOT Due. mNotificationMinute=" + mNotificationMinute + " and mMinDiff="+ mMinDiff);
                     isTaiChiDue = false;
                     if (mNotificationMinute != mMinDiff) {   // Have we updated the notification on this minute yet?
-                        updateStatusNotification(String.format(Locale.US, "Tai Chi due in %d minutes", mMinDiff * -1));
+                        updateStatusNotification(String.format(Locale.US, "Tai Chi due in %d minutes", mMinDiff * -1), false);
                         mNotificationMinute = mMinDiff;
                     }
-                    sendActivityBroadCast("normal", pitch, mSecDiff, inTaiChiMode, mStatus);
+                    sendActivityBroadCast("normal", currentPitch, mSecDiff, inTaiChiMode, mStatus);
                 }
             }
         }
     }
 
+    @Override
     public void onAccuracyChanged(Sensor sensor, int accuracy) {
     }
 
-    float[] mGravity = null;
-    float[] mGeomagnetic = null;
-
+    @Override
     public void onSensorChanged(SensorEvent event) {
-        if (event.sensor == accelerometer) {
-            mGravity = event.values;
-            //Log.d(TAG, "Accel");
-        }
-        if (event.sensor == magnetometer) {
-            mGeomagnetic = event.values;
-            //Log.d(TAG, "Mag");
+        if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
+            System.arraycopy(event.values, 0, mGravity, 0, 3);
+            hasGravity = true;
+        } else if (event.sensor.getType() == Sensor.TYPE_MAGNETIC_FIELD) {
+            System.arraycopy(event.values, 0, mGeomagnetic, 0, 3);
+            hasGeomagnetic = true;
         }
 
-        if (mGravity != null && mGeomagnetic != null) {
-            // Log.d(TAG, "Calculating orientation");
-            float[] R = new float[9];
-            float[] I = new float[9];
-            boolean success = SensorManager.getRotationMatrix(R, I, mGravity, mGeomagnetic);
-            if (success) {
-                float[] orientation = new float[3];
-                SensorManager.getOrientation(R, orientation);
-                pitch = orientation[1] * FROM_RADS_TO_DEGS; // orientation contains: azimut, pitch and roll
+        if (hasGravity) {
+            if (hasGeomagnetic) {
+                boolean success = SensorManager.getRotationMatrix(rotationMatrixR, rotationMatrixI, mGravity, mGeomagnetic);
+                if (success) {
+                    SensorManager.getOrientation(rotationMatrixR, orientationValues);
+                    pitch = orientationValues[1] * FROM_RADS_TO_DEGS; // orientation contains: azimuth, pitch and roll
+                }
+            } else {
+                // Fallback: Calculate pitch directly from accelerometer values when magnetometer is unavailable (e.g. emulators)
+                double ax = mGravity[0];
+                double ay = mGravity[1];
+                double az = mGravity[2];
+                pitch = (float) Math.toDegrees(Math.atan2(ay, Math.sqrt(ax * ax + az * az)));
             }
-            // Log.d(TAG, "Changing");
         }
-
     }
 
     private void createNotificationChannel() {
@@ -220,63 +251,49 @@ public class TimerService extends JobIntentService implements SensorEventListene
         channel.setLockscreenVisibility(NotificationCompat.VISIBILITY_PUBLIC);
 
         NotificationManager notificationManager = getSystemService(NotificationManager.class);
-        notificationManager.createNotificationChannel(channel);
+        if (notificationManager != null) {
+            notificationManager.createNotificationChannel(channel);
+        }
     }
 
-    private Notification buildStatusNotification(String notificationText) {
+    private Notification buildStatusNotification(String notificationText, boolean alert) {
         Intent intent = new Intent(this, MainActivity.class);
         PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE);
 
-        Log.d(TAG, "Building Status Notification");
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_NAME);
         builder.setSmallIcon(R.drawable.ic_notification);
         builder.setContentTitle(notificationTitle);
         builder.setContentText(notificationText);
         builder.setOngoing(true);
-        builder.setAutoCancel(true);
+        builder.setAutoCancel(false);
         builder.setPriority(NotificationCompat.PRIORITY_HIGH);
-        builder.setDefaults(Notification.DEFAULT_SOUND | Notification.DEFAULT_VIBRATE);
         builder.setContentIntent(pendingIntent);
         if (isTaiChiDue) {
             builder.setColor(Color.RED);
         } else {
             builder.setColor(Color.GREEN);
         }
-        builder.setOnlyAlertOnce(true);
-        builder.setSound(Settings.System.DEFAULT_NOTIFICATION_URI);
+
+        if (alert) {
+            builder.setDefaults(Notification.DEFAULT_SOUND | Notification.DEFAULT_VIBRATE);
+            builder.setSound(Settings.System.DEFAULT_NOTIFICATION_URI);
+            builder.setOnlyAlertOnce(false);
+        } else {
+            builder.setOnlyAlertOnce(true);
+        }
         return builder.build();
     }
 
-    private void createPopupNotification(String notificationText) {
-        Log.d(TAG, "Building Popup Notification");
-        Intent intent = new Intent(this, MainActivity.class);
-        PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE);
-
-        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_NAME);
-        builder.setOngoing(false);
-        builder.setColor(Color.RED);
-        builder.setAutoCancel(true);
-        builder.setPriority(NotificationCompat.PRIORITY_HIGH);
-        builder.setDefaults(Notification.DEFAULT_SOUND | Notification.DEFAULT_VIBRATE);
-        builder.setSmallIcon(R.drawable.ic_notification);
-        builder.setContentTitle(notificationTitle);
-        builder.setContentText(notificationText);
-        builder.setContentIntent(pendingIntent);
-
-        NotificationManager mNotificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-        mNotificationManager.notify(STATUS_NOTIFICATION_ID, builder.build());
-    }
-
-
-    private void updateStatusNotification(String notificationText) {
+    private void updateStatusNotification(String notificationText, boolean alert) {
         NotificationManagerCompat notificationManager = NotificationManagerCompat.from(this);
         if (notificationManager.areNotificationsEnabled()) {
-            if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                // Notifications permissions denied. We handle this on MainActivity
-                Log.d(TAG, "Missing notification Permissions");
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                    ActivityCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                Log.d(TAG, "Missing notification permissions");
+                return;
             }
-            notificationManager.notify(STATUS_NOTIFICATION_ID, buildStatusNotification(notificationText));
-            Log.d(TAG, "Updating Status Notification");
+            notificationManager.notify(STATUS_NOTIFICATION_ID, buildStatusNotification(notificationText, alert));
+            Log.d(TAG, "Updating Status Notification: " + notificationText);
         } else {
             Log.d(TAG, "Notifications Disabled");
         }
@@ -286,21 +303,20 @@ public class TimerService extends JobIntentService implements SensorEventListene
         try {
             Intent broadCastIntent = new Intent();
             broadCastIntent.setAction(MainActivity.BROADCAST_ACTION);
-            broadCastIntent.setPackage("com.swillers.quadtaichi");
+            broadCastIntent.setPackage(getPackageName());
 
             Bundle extras = new Bundle();
-            extras.putString("action",action);
-            extras.putFloat("pitch",pitch);
-            extras.putLong("secDiff",secDiff);
-            extras.putBoolean("inTaiChiMode",inTaiChiMode);
-            extras.putString("status",status);
+            extras.putString("action", action);
+            extras.putFloat("pitch", pitch);
+            extras.putLong("secDiff", secDiff);
+            extras.putBoolean("inTaiChiMode", inTaiChiMode);
+            extras.putBoolean("inTaiChiMode", inTaiChiMode);
+            extras.putString("status", status);
             broadCastIntent.putExtras(extras);
 
             sendBroadcast(broadCastIntent);
-            // Log.d(TAG, "Sending broadcast");
-        }
-        catch (Exception ex) {
-            ex.printStackTrace();
+        } catch (Exception ex) {
+            Log.e(TAG, "Error sending broadcast", ex);
         }
     }
 
@@ -312,11 +328,15 @@ public class TimerService extends JobIntentService implements SensorEventListene
     @Override
     public void onDestroy() {
         super.onDestroy();
-    }
+        Log.d(TAG, "onDestroy");
 
-    @Override
-    protected void onHandleWork(@NonNull Intent intent) {
-        Log.d(TAG, "onHandleWork:");
+        if (timer != null) {
+            timer.cancel();
+            timer = null;
+        }
 
+        if (mSensorManager != null) {
+            mSensorManager.unregisterListener(this);
+        }
     }
 }

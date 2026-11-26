@@ -16,7 +16,7 @@
         android:theme="@style/AppTheme.NoActionBar"
         android:enableOnBackInvokedCallback="true">
         <service
-            android:name="TimerService"
+            android:name=".TimerService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="health"/>
